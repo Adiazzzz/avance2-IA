@@ -311,3 +311,52 @@ Finalmente, hay que tener en cuenta que los datos parecen haber sido **creados p
 | ![Ejemplares vs préstamos](outputs/graficos/biblioteca_regresion_ejemplares_prestamos.png) | `regplot` | Relación positiva (r = 0.49) entre ejemplares y préstamos por libro. |
 | ![Géneros más prestados](outputs/graficos/biblioteca_barras_generos.png) | `barplot` horizontal | Los 10 géneros con más préstamos. |
 
+## Neuronas para las compuertas OR y NOT
+
+### ¿Qué se hizo?
+
+Con la misma neurona que se usó en clase para la compuerta AND, se entrenaron dos compuertas más en el archivo.
+
+- **OR:** da 1 si al menos una de las dos entradas es 1.
+- **NOT:** tiene una sola entrada y da el valor contrario (0 → 1 y 1 → 0).
+
+En ambos casos se usó la tasa de aprendizaje de 0.1 y se empezó con los mismos valores que en la clase (`w = 0.1` y `b = 0.0`). El código recorre las filas de la tabla, calcula el error de cada una (`error = y_real - y_pred`) y corrige los pesos y el bias, igual que en el ejercicio de clase. Al final se verificó cada fila y se guardó el gráfico del error en `outputs/graficos/error_or_not.png`.
+
+Además se hizo una **prueba extra con XOR** (`outputs/graficos/error_xor.png`) para poder responder la última pregunta con un resultado real y no solo con teoría.
+
+### Resultados
+
+| Compuerta | Épocas para aprender | Error total por época | Parámetros finales |
+|-----------|----------------------|-----------------------|--------------------|
+| AND (clase) | 3 | 3, 3, 0 | w₁ = 0.2, w₂ = 0.1, b = -0.2 |
+| OR | 2 | 1, 0 | w₁ = 0.1, w₂ = 0.1, b = -0.1 |
+| NOT | 4 | 1, 2, 1, 0 | w₁ = -0.1, b = 0.0 |
+| XOR (extra) | no aprende | 2, 3, 2, 3, 4, 4, 4, 4, 4, 4 | se queda dando vueltas |
+
+Las pruebas finales de OR y NOT dieron todas las filas correctas.
+
+Una cosa que llama la atención en NOT es que el peso termina **negativo** (w₁ = -0.1). Tiene sentido: en NOT, que la entrada valga 1 debe *apagar* la neurona, y para eso el peso tiene que restar en vez de sumar. Además, el error de NOT sube a 2 en la época 2 antes de bajar: mientras el bias y el peso se ajustan, la neurona se equivoca en las dos filas, hasta que se acomodan.
+
+### Respuestas a las preguntas
+
+**1. ¿Cuántas épocas necesitó cada compuerta para aprender?**
+
+OR necesitó **2 épocas** y NOT necesitó **4 épocas**. Como referencia, AND (con los mismos valores iniciales) necesitó 3.
+
+**2. ¿Fue necesario ajustar la tasa de aprendizaje? ¿Por qué?**
+
+No. Se usó 0.1 en las dos compuertas y ambas llegaron a error 0 en pocas épocas, así que no hubo motivo para cambiarla. En la clase ya se había visto qué pasa en los extremos: con 0.001 la neurona de AND tardó 34 épocas (muy lenta) y con 1.0 aprendió en 6 pero con parámetros enormes (b = -3.0). El valor de 0.1 queda en un punto intermedio que funciona bien para estos problemas tan pequeños.
+
+**3. ¿Qué diferencias se encontraron entre la compuerta AND y la OR?**
+
+Las dos empezaron con los mismos valores, pero terminaron distinto:
+
+- Con `z = 0` la neurona predice 1, así que al arrancar dice "sí" en todas las filas. En OR solo una fila debe dar 0, la (0, 0), y por eso el error de la primera época fue 1. En AND tres filas deben dar 0, y el error fue 3.
+- En OR basta con bajar un poco el bias (de 0.0 a -0.1) y los pesos se quedan en 0.1. En AND hubo que bajar más el bias (a -0.2) y además subir `w₁` a 0.2, para que la neurona solo se active cuando las dos entradas valen 1.
+- Por eso OR aprendió más rápido (2 épocas contra 3): "activarse con una entrada" exige un umbral más bajo que "activarse solo con las dos".
+
+**4. ¿Por qué la compuerta XOR no puede ser aprendida por una sola neurona?**
+
+La neurona decide con la cuenta `z = w₁·x₁ + w₂·x₂ + b`, y eso equivale a trazar **una sola línea recta** que separa las entradas que dan 1 de las que dan 0. Con AND y OR sí se puede trazar esa recta. Con XOR no: las entradas (0, 1) y (1, 0) deben dar 1, mientras que (0, 0) y (1, 1) deben dar 0, y esos dos grupos quedan cruzados, así que ninguna recta los separa.
+
+Se comprobó en la prueba extra: el error de XOR no baja, sube hasta 4 y se queda ahí. A partir de la época 5 los parámetros dan una vuelta completa y regresan siempre al mismo punto, y la prueba final falla 2 de las 4 filas. Esta limitación del perceptrón simple la señalaron Minsky y Papert en 1969, y se resuelve con **más de una neurona organizadas en capas**, algo que se verá más adelante.
