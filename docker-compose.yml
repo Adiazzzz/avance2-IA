@@ -1,7 +1,7 @@
 services:
   python:
     build: .
-    container_name: ia_python_biblioteca
+    container_name: avance2_IA
     volumes:
       - ./src:/app/src
       - ./notebooks:/app/notebooks
