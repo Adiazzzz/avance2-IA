@@ -5,6 +5,10 @@ Actividad independiente - Clase 8 (Pandas + Seaborn).
 EDA, limpieza y preparación de los datos del proyecto Biblioteca COTECNOVA.
 El producto final es una tabla con un registro por préstamo, lista para un
 modelo que prediga si un préstamo se devolverá con retraso.
+
+Avance 2 (Clase 7 - preparación de datos): se agregó la revisión de duplicados,
+categorías, tipos, valores imposibles y atípicos, la tabla antes / después y la
+exportación del dataset limpio a data/proyecto_limpio.csv.
 """
 from pathlib import Path
 
@@ -23,6 +27,9 @@ RAIZ = Path(__file__).resolve().parents[1]
 DATA = RAIZ / "data"
 GRAFICOS = RAIZ / "outputs" / "graficos"
 SALIDA_ML = RAIZ / "outputs" / "prestamos_preparados_ml.csv"
+RUTA_LIMPIO = DATA / "proyecto_limpio.csv"          # dataset limpio pedido en el Avance 2
+SALIDA_ANTES_DESPUES = RAIZ / "outputs" / "antes_despues.csv"
+RUTA_LIBROS = DATA / "libros_demanda.csv"            # dataset por libro (segundo perceptrón)
 
 TABLAS = [
     "libro", "ejemplar", "genero", "libro_genero", "editorial",
@@ -33,6 +40,19 @@ DETALLADAS = ["prestamo", "ejemplar", "usuario"]
 
 
 COLUMNAS_USUARIO = ["id_usuario", "rol", "limite_prestamos", "fecha_registro"]
+
+# Llave primaria de cada tabla (en las tablas de relación la llave son dos columnas)
+LLAVES = {
+    "libro": ["id_libro"], "ejemplar": ["id_ejemplar"], "genero": ["id_genero"],
+    "editorial": ["id_editorial"], "autor": ["id_autor"], "usuario": ["id_usuario"],
+    "prestamo": ["id_prestamo"], "libro_genero": ["id_libro", "id_genero"],
+    "autor_libro": ["id_autor", "id_libro"],
+    "prestamo_ejemplar": ["id_prestamo", "id_ejemplar"],
+}
+
+# Columnas de texto con pocas categorías que se usan en el proyecto
+CATEGORICAS = [("usuario", "rol"), ("prestamo_ejemplar", "estado"),
+               ("ejemplar", "tipo_material")]
 
 
 
@@ -79,6 +99,42 @@ def explorar_todo(tablas):
         explorar_tabla(nombre, df, detallada=nombre in DETALLADAS)
 
 
+def revisar_duplicados(tablas):
+    """Duplicados por fila completa y por llave primaria en cada tabla."""
+    print("\n" + "=" * 70)
+    print("REVISIÓN DE DUPLICADOS")
+    print("=" * 70)
+    total = 0
+    for nombre, df in tablas.items():
+        filas = int(df.duplicated().sum())
+        llave = int(df.duplicated(subset=LLAVES[nombre]).sum())
+        total += filas + llave
+        print(f"{nombre:<18} filas repetidas: {filas:>2} | llave repetida "
+              f"({', '.join(LLAVES[nombre])}): {llave:>2}")
+    if total == 0:
+        print("-> No hay duplicados: no se elimina ninguna fila.")
+    else:
+        print(f"-> {total} duplicados encontrados: revisar antes de continuar.")
+
+
+def revisar_categorias(tablas):
+    """Busca variantes de una misma categoría (espacios, mayúsculas/minúsculas)."""
+    print("\n" + "=" * 70)
+    print("REVISIÓN DE CATEGORÍAS INCONSISTENTES")
+    print("=" * 70)
+    for nombre, col in CATEGORICAS:
+        s = tablas[nombre][col].dropna().astype(str)
+        con_espacios = int((s != s.str.strip()).sum())
+        variantes = s.nunique() - s.str.strip().str.lower().nunique()
+        print(f"{nombre}.{col}: {s.nunique()} valores -> {s.value_counts().to_dict()}")
+        if con_espacios == 0 and variantes == 0:
+            print("   Sin espacios sobrantes ni variantes de mayúsculas: no se corrige nada.")
+        else:
+            print(f"   {con_espacios} con espacios y {variantes} variantes: unificar.")
+    print("Nota: el estado 'Danado' se escribe sin tilde en todo el archivo; es un "
+          "único valor consistente, se deja igual.")
+
+
 
 # 2. LIMPIEZA
 
@@ -106,6 +162,8 @@ def limpiar_tablas(tablas):
 
     u = t["usuario"]
     u["fecha_registro"] = pd.to_datetime(u["fecha_registro"], errors="coerce")
+    print("Tipos de dato: prestamo.fecha_prestamo, fecha_devolucion, fecha_limite y "
+          "usuario.fecha_registro estaban como texto -> convertidas a datetime")
     return t
 
 
@@ -146,6 +204,58 @@ def construir_prestamos(t):
     return df
 
 
+def revisar_imposibles_y_atipicos(df):
+    """Valores imposibles y atípicos del dataset por préstamo, con la decisión tomada."""
+    print("\n" + "=" * 70)
+    print("VALORES IMPOSIBLES Y ATÍPICOS")
+    print("=" * 70)
+    imposibles = {
+        "plazo_dias <= 0": int((df["plazo_dias"] <= 0).sum()),
+        "devolución anterior al préstamo": int((df["fecha_devolucion"] < df["fecha_prestamo"]).sum()),
+        "multa negativa": int((df["multa"] < 0).sum()),
+    }
+    for regla, n in imposibles.items():
+        print(f"{regla:<34} {n:>4}")
+    if sum(imposibles.values()) == 0:
+        print("-> Ningún valor imposible: no se elimina nada.")
+
+    n_antes = int(df["prestamo_antes_registro"].sum())
+    print(f"\nPréstamos anteriores al registro del usuario: {n_antes} ({n_antes / len(df):.1%}).")
+    print("   Decisión: se conservan y quedan marcados con la columna "
+          "'prestamo_antes_registro' (en el dataset de trabajo; no pasa al CSV final porque "
+          "no es entrada del modelo). Ninguna variable de entrada del modelo depende de "
+          "fecha_registro, y borrarlos quitaría más de una cuarta parte de los datos.")
+
+    n_exceden = int((df["n_ejemplares"] > df["limite_prestamos"]).sum())
+    print(f"Préstamos con más ejemplares que el límite del usuario: {n_exceden}. "
+          "Se conservan: no afectan al objetivo.")
+
+    r = df["dias_retraso"].dropna()
+    q1, q3 = r.quantile([0.25, 0.75])
+    iqr = q3 - q1
+    bajo, alto = q1 - 1.5 * iqr, q3 + 1.5 * iqr
+    n_atip = int(((r < bajo) | (r > alto)).sum())
+    print(f"\nAtípicos en dias_retraso (regla 1.5 x IQR): rango válido [{bajo:.1f}, {alto:.1f}], "
+          f"datos de {r.min():.0f} a {r.max():.0f} -> {n_atip} atípicos. No se elimina nada.")
+
+
+def tabla_antes_despues(antes, despues):
+    """Compara filas, columnas y nulos de prestamo.csv (antes) y el dataset final (después)."""
+    tabla = pd.DataFrame({
+        "antes (prestamo.csv)": [antes.shape[0], antes.shape[1], int(antes.isnull().sum().sum())],
+        "despues (proyecto_limpio.csv)": [despues.shape[0], despues.shape[1],
+                                          int(despues.isnull().sum().sum())],
+    }, index=["filas", "columnas", "nulos"])
+    print("\n" + "=" * 70)
+    print("TABLA ANTES / DESPUÉS")
+    print("=" * 70)
+    print(tabla.to_string())
+    SALIDA_ANTES_DESPUES.parent.mkdir(parents=True, exist_ok=True)
+    tabla.to_csv(SALIDA_ANTES_DESPUES)
+    print(f"\nTabla guardada en {SALIDA_ANTES_DESPUES}")
+    return tabla
+
+
 def construir_demanda_libros(t):
     """Por libro: cuántos ejemplares tiene y cuántas veces se ha prestado."""
     ej = t["ejemplar"][["id_ejemplar", "id_libro"]]
@@ -154,6 +264,29 @@ def construir_demanda_libros(t):
     libros = (ej.groupby("id_libro").size().rename("ejemplares").reset_index()
               .merge(veces, on="id_libro", how="left").fillna({"prestamos": 0}))
     return libros
+
+
+def exportar_libros_demanda(t, libros):
+    """
+    Dataset con un registro por libro para el segundo perceptrón (demanda del libro).
+    - prestado: variable objetivo 0/1 (1 = el libro se ha prestado al menos una vez).
+    - prestamos: cuántas veces se prestó. Se guarda solo como referencia: NO es entrada
+      porque contiene la respuesta (prestado = prestamos > 0).
+    - ejemplares: copias que tiene la biblioteca del libro (entrada 1).
+    - anio_edicion: año de la edición MÁS RECIENTE entre sus ejemplares (entrada 2).
+      Los ejemplares de un mismo libro traen años distintos, por eso se resume en un valor.
+    """
+    anio = (t["ejemplar"].groupby("id_libro")["anio_edicion"].max()
+            .rename("anio_edicion").reset_index())
+    out = libros.merge(anio, on="id_libro", how="left")
+    out["prestamos"] = out["prestamos"].astype(int)
+    out["prestado"] = (out["prestamos"] > 0).astype(int)
+    out = out[["id_libro", "ejemplares", "anio_edicion", "prestamos", "prestado"]]
+    out.to_csv(RUTA_LIBROS, index=False)
+    print(f"\nDataset por libro: {out.shape[0]} filas x {out.shape[1]} columnas -> {RUTA_LIBROS}")
+    print(f"Libros prestados al menos una vez: {out['prestado'].mean():.1%} "
+          f"({int(out['prestado'].sum())} de {len(out)})")
+    return out
 
 
 def construir_demanda_generos(t):
@@ -333,7 +466,9 @@ def preparar_ml(df):
 
     SALIDA_ML.parent.mkdir(parents=True, exist_ok=True)
     ml.to_csv(SALIDA_ML, index=False)
+    ml.to_csv(RUTA_LIMPIO, index=False)
     print(f"\nDataset ML: {ml.shape[0]} filas x {ml.shape[1]} columnas -> {SALIDA_ML}")
+    print(f"Dataset limpio (Avance 2) exportado también a {RUTA_LIMPIO}")
     print(ml.head().to_string())
     return ml
 
@@ -344,6 +479,9 @@ def main():
     print("=" * 70)
     tablas = cargar_tablas()
     explorar_todo(tablas)
+    revisar_duplicados(tablas)
+    revisar_categorias(tablas)
+    prestamo_original = tablas["prestamo"].copy()   # para la tabla antes / después
 
     print("\n" + "=" * 70)
     print("LIMPIEZA")
@@ -351,12 +489,15 @@ def main():
     tablas = limpiar_tablas(tablas)
 
     df = construir_prestamos(tablas)
+    revisar_imposibles_y_atipicos(df)
     libros = construir_demanda_libros(tablas)
     generos = construir_demanda_generos(tablas)
 
     imprimir_hallazgos(tablas, df, libros, generos)
     visualizar(df, libros, generos)
-    preparar_ml(df)
+    ml = preparar_ml(df)
+    exportar_libros_demanda(tablas, libros)
+    tabla_antes_despues(prestamo_original, ml)
     print("\nProceso completado exitosamente.")
 
 
