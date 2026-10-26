@@ -361,79 +361,94 @@ La neurona decide con la cuenta `z = w₁·x₁ + w₂·x₂ + b`, y eso equival
 
 Se comprobó en la prueba extra: el error de XOR no baja, sube hasta 4 y se queda ahí. A partir de la época 5 los parámetros dan una vuelta completa y regresan siempre al mismo punto, y la prueba final falla 2 de las 4 filas. Esta limitación del perceptrón simple la señalaron Minsky y Papert en 1969, y se resuelve con **más de una neurona organizadas en capas**, algo que se verá más adelante.
 
-
 # Avance 2
 
+**Contenido:** [Resumen](#resumen) · [A. Ajustes](#a-ajustes-a-partir-del-avance-1) · [B. Preparación de datos](#b-preparación-de-datos-con-pandas) · [C. Visualización](#c-visualización-con-seaborn) · [D. Perceptrones](#d-primer-modelo-perceptrón-desde-cero) · [E. Plan final](#e-plan-hacia-el-proyecto-final) · [Cómo ejecutar](#cómo-ejecutar-el-avance-2-con-docker)
 
-**Contenido:**  [B. Preparación de datos](#b-preparación-de-datos-con-pandas) · [C. Visualización](#c-visualización-con-seaborn) · [D. Perceptrón](#d-primer-modelo-perceptrón-desde-cero) · [E. Plan final](#e-plan-hacia-el-proyecto-final) · 
 ## Resumen
 
-| Elemento | Resultado |
-|---|---|
-| Pregunta que responde el modelo | Dado un préstamo, ¿se devolverá con retraso? |
-| Tipo de problema | Clasificación binaria (retraso = 1, a tiempo = 0) |
-| Dataset limpio | `data/proyecto_limpio.csv` (711 filas, 15 columnas, 0 nulos) |
-| Gráficos de Seaborn | 5, en `outputs/avance2/` |
-| Modelo | Perceptrón con sigmoide y pérdida logarítmica (NumPy) |
-| Exactitud | 69.5 % en entrenamiento y 68.5 % en prueba. Adivinar siempre la clase más común daría 50.5 % |
+| Elemento | Modelo 1: retraso del préstamo | Modelo 2: demanda del libro |
+|---|---|---|
+| Pregunta que responde | Dado un préstamo, ¿se devolverá con retraso? | Dado un libro, ¿se ha prestado alguna vez? |
+| Tipo de problema | Clasificación binaria (retraso = 1, a tiempo = 0) | Clasificación binaria (prestado = 1, nunca prestado = 0) |
+| Dataset limpio | `data/proyecto_limpio.csv` (711 filas, 12 columnas, 0 nulos) | `data/libros_demanda.csv` (1 200 filas, 5 columnas, 0 nulos) |
+| Entradas (estandarizadas) | `plazo_dias`, `n_ejemplares` | `ejemplares`, `anio_edicion` |
+| Script | `src/perceptron_proyecto_retraso.py` | `src/perceptron_proyecto_demanda.py` |
+| Exactitud en entrenamiento / prueba | 69.5 % / 68.5 % | 67.8 % / 71.2 % |
+| Referencia: predecir siempre la clase más común (prueba) | 55.9 % | 60.0 % |
 
-**Idea central.** Los préstamos de 7 días terminan con retraso 8 de cada 10 veces, y los de 30 días, 2 de cada 10. El perceptrón aprende esa relación y la usa para estimar la probabilidad de retraso de un préstamo nuevo.
+**Gráficos:** 5 de Seaborn en `outputs/graficos/` (requisito C) y 4 de los perceptrones (curva de aprendizaje y frontera de decisión de cada modelo) en `outputs/avance2/` (requisito D).
+
+**Idea central.** Los préstamos de 7 días terminan con retraso 8 de cada 10 veces, y los de 30 días, 2 de cada 10: el plazo es lo que más explica el retraso. Del lado del catálogo, el 61.5 % de los libros con un solo ejemplar nunca se ha prestado, frente al 8.7 % de los que tienen 5. Cada perceptrón aprende una de esas dos relaciones y la usa para estimar una probabilidad.
 
 > **Los datos son simulados:** se elaboraron a partir del modelo entidad-relación de la biblioteca. Los resultados validan el método, no describen la biblioteca real de Cotecnova.
 
 ---
 
+## A. Ajustes a partir del avance 1
 
-**Cambios técnicos**
+**Observaciones recibidas.** No se recibió corrección ni observaciones escritas del avance 1 (sustentación del 21 de septiembre), así que no hay una lista de observaciones que responder. Los ajustes de esta entrega son decisiones del propio grupo para pasar de describir los datos a prepararlos y entrenar modelos:
 
 | Qué cambió | Por qué |
 |---|---|
-| El análisis pasó de listas de diccionarios y NumPy a **Pandas y Seaborn** | Pandas facilita unir tablas |
-| Se definió una **variable objetivo** (`con_retraso`) | En el avance 1 el análisis solo describía los datos; para entrenar un modelo hay que decirle qué debe predecir |
-| Se construyó una tabla con **un registro por préstamo** | El préstamo es la unidad sobre la que se predice |
+| El análisis pasó de listas de diccionarios y NumPy a **Pandas y Seaborn** | Pandas facilita unir tablas y Seaborn, comparar variables |
+| Se definió una **variable objetivo** para cada modelo (`con_retraso` y `prestado`) | En el avance 1 el análisis solo describía los datos; para entrenar un modelo hay que decirle qué debe predecir |
+| Se construyeron dos tablas: **un registro por préstamo** y **un registro por libro** | La unidad sobre la que se predice es distinta en cada modelo |
 | Se descartaron datos personales del usuario (`correo`, `telefono`, `direccion`, `clave`) | No ayudan al modelo y no deben circular |
+| Se agregó un **segundo perceptrón** (demanda del libro) | Apoya la decisión de qué libros adquirir, hallazgo del primer corte (libros de alta demanda y bajo stock) |
 
-**El alcance y la fuente de datos no cambiaron:** sigue siendo un chatbot de consulta para la biblioteca, con CSV simulados. Este modelo aporta al chatbot porque, si se sabe qué préstamos tienen riesgo de retraso, el bibliotecario puede avisar a tiempo y reducir los ejemplares sin devolver (hallazgo del primer corte).
+**El alcance y la fuente de datos no cambiaron:** sigue siendo un chatbot de consulta para la biblioteca, con CSV simulados. El modelo de retraso aporta al chatbot porque, si se sabe qué préstamos tienen riesgo de retraso, el bibliotecario puede avisar a tiempo y reducir los ejemplares sin devolver. El modelo de demanda aporta a las decisiones de adquisición.
 
 ---
 
 ## B. Preparación de datos con Pandas
 
-Script: `src/preparacion_proyecto.py`. Entrega un dataset limpio, con un registro por préstamo cerrado, listo para el modelo.
+Script: `src/analisis_biblioteca.py`. Carga las tablas, las inspecciona, las limpia y entrega dos datasets listos para los modelos: `data/proyecto_limpio.csv` (un registro por préstamo cerrado) y `data/libros_demanda.csv` (un registro por libro).
 
 ### Carga e inspección
-Se cargan `prestamo`, `usuario` y `prestamo_ejemplar` con `pd.read_csv` (si falta un archivo, el programa avisa y se detiene). De cada tabla se imprime `shape`, `info()`, nulos por columna y duplicados, para conocer el estado de los datos antes de tocarlos.
+Se cargan con `pd.read_csv` 10 de los 11 CSV de `data/` (si falta alguno, el programa avisa y se detiene). `ubicacion.csv` solo se usó en el primer corte, para las zonas de la biblioteca, y no interviene en este avance. De cada tabla se imprime `shape`; de `prestamo`, `ejemplar` y `usuario` se imprime además `info()`; de todas, los nulos por columna y los duplicados.
 
-### Tabla antes / después
+| Tabla | Filas × columnas | Tabla | Filas × columnas |
+|---|---:|---|---:|
+| `libro` | 1 200 × 7 | `usuario` | 400 × 12 |
+| `ejemplar` | 2 641 × 18 | `prestamo` | 900 × 7 |
+| `genero` | 30 × 2 | `prestamo_ejemplar` | 1 258 × 3 |
+| `libro_genero` | 1 257 × 2 | `editorial` | 40 × 2 |
+| `autor` | 350 × 7 | `autor_libro` | 1 644 × 2 |
+
+### Tabla antes / después (dataset de préstamos)
 
 | | Antes (`prestamo.csv`) | Después (`proyecto_limpio.csv`) |
 |---|---:|---:|
 | Filas | 900 | 711 |
-| Columnas | 7 | 15 |
+| Columnas | 7 | 12 |
 | Valores nulos | 816 | 0 |
 
 - **Filas (900 → 711):** se excluyen los 189 préstamos que todavía no se han devuelto.
-- **Columnas (7 → 15):** se unen datos de `usuario` y `prestamo_ejemplar` y se crean columnas nuevas (ver más abajo).
+- **Columnas (7 → 12):** se unen datos de `usuario` y `prestamo_ejemplar` y se crean columnas nuevas (ver más abajo). Las 12 son `plazo_dias`, `n_ejemplares`, `limite_prestamos`, `mes_prestamo`, `dia_semana`, `dias_retraso`, `con_retraso` y 5 columnas `rol_*`.
 - **Nulos (816 → 0):** eran 189 de `fecha_devolucion` y 627 de `observaciones`; ninguno pasa al dataset final.
+
+El dataset por libro (`libros_demanda.csv`) sale de `libro`, `ejemplar` y `prestamo_ejemplar`: 1 200 filas × 5 columnas (`id_libro`, `ejemplares`, `anio_edicion`, `prestamos`, `prestado`) y 0 nulos.
 
 ### Tratamiento de cada problema
 
 | Problema | Qué se encontró | Decisión y por qué |
 |---|---|---|
-| Nulos | `fecha_devolucion`: 189 (el préstamo sigue abierto) | **No se inventa una fecha**, porque falsearía el retraso. Se excluyen esas filas: no se conoce el resultado, así que no sirven para enseñarle al modelo. |
+| Nulos | `fecha_devolucion`: 189 (el préstamo sigue abierto) | **No se inventa una fecha**, porque falsearía el retraso. Se excluyen esas filas del modelo: no se conoce el resultado, así que no sirven para enseñarle a predecir. |
 | Nulos | `observaciones`: 627 (nota opcional del bibliotecario) | No se usa como entrada: puede escribirse al cerrar el préstamo y daría pistas de la respuesta. |
-| Duplicados | 0, revisados por fila completa y por `id_prestamo` | No hay nada que eliminar. |
-| Tipos incorrectos | 4 columnas de fecha llegaron como texto | Se convierten a `datetime` con `pd.to_datetime`, necesario para restar fechas. |
+| Nulos | `segundo_nombre`: 123 en `autor` y 143 en `usuario` | Campo opcional: se rellena con texto vacío. |
+| Duplicados | 0 en las 10 tablas, revisados por fila completa y por llave primaria | No hay nada que eliminar. |
+| Tipos incorrectos | 4 columnas de fecha (`fecha_prestamo`, `fecha_devolucion`, `fecha_limite` y `fecha_registro`) llegaron como texto | Se convierten a `datetime` con `pd.to_datetime`, necesario para restar fechas. |
 | Valores imposibles | Ningún plazo ≤ 0, ninguna devolución anterior al préstamo, ninguna multa negativa | No hay nada que eliminar. |
-| Valores imposibles | 244 préstamos son anteriores a la fecha de registro del usuario y 21 superan su límite de ejemplares | Se **marcan con una bandera** (`prestamo_antes_registro`, `excede_limite`) y se conservan: ninguna entrada del modelo depende de ellos y borrarlos eliminaría el 27 % de los datos. |
-| Atípicos | `dias_retraso` va de −29 a 33 y ningún valor queda fuera de 1.5 veces el rango intercuartílico | No se elimina nada: los valores son razonables. |
-| Categorías inconsistentes | `rol` tiene 5 valores sin variantes de escritura | Se limpian espacios y se codifica (ver abajo). |
+| Valores imposibles | 244 préstamos (27.1 %) son anteriores a la fecha de registro del usuario y 21 superan el límite de ejemplares de su usuario | Se **conservan**. Los 244 quedan marcados con la columna `prestamo_antes_registro` en el dataset de trabajo (no pasa al CSV final porque no es entrada del modelo). Ninguna entrada depende de esos campos y borrarlos eliminaría más de una cuarta parte de los datos. |
+| Atípicos | `dias_retraso` va de −29 a 33; con la regla de 1.5 veces el rango intercuartílico el rango válido es [−43.5, 48.5] y ningún valor queda fuera | No se elimina nada: los valores son razonables. |
+| Categorías inconsistentes | `rol` (5 valores), `estado` (4) y `tipo_material` (1) no tienen espacios sobrantes ni variantes de mayúsculas | No se corrige nada. `tipo_material` vale siempre `Fisico`, así que no aporta información y no se usa. |
 
 ### Codificación de la variable categórica
-`rol` (Administrativo, Bibliotecario, Docente, Estudiante, Externo) es texto, y el modelo solo entiende números. Se convierte con `pd.get_dummies` en 5 columnas `rol_*` con valores 0 o 1 (una columna por rol, con un 1 en el rol del usuario). Se usa esta técnica y no los números del 1 al 5 porque ningún rol es "mayor" que otro, y un 5 le haría creer al modelo que lo es.
+`rol` (Administrativo, Bibliotecario, Docente, Estudiante, Externo) es texto, y el modelo solo entiende números. Se convierte con `pd.get_dummies` en 5 columnas `rol_*` con valores 0 o 1 (una columna por rol, con un 1 en el rol del usuario). Se usa esta técnica y no los números del 1 al 5 porque ningún rol es "mayor" que otro, y un 5 le haría creer al modelo que lo es. Los perceptrones no usan `rol`; queda codificado para probarlo con Scikit-Learn.
 
 ```python
-df = pd.get_dummies(df, columns=["rol"], prefix="rol", dtype=int)
+ml = pd.get_dummies(dev[columnas], columns=["rol"], prefix="rol", dtype=int)
 ```
 
 ### Columnas creadas
@@ -444,95 +459,142 @@ df = pd.get_dummies(df, columns=["rol"], prefix="rol", dtype=int)
 | `dias_retraso` | `fecha_devolucion − fecha_limite` (negativo = devuelto antes de tiempo) |
 | `n_ejemplares` | Cuántos libros incluye el préstamo (1, 2 o 3) |
 | `mes_prestamo`, `dia_semana` | Partes de la fecha del préstamo |
-| `con_retraso` | 1 si `dias_retraso > 0`, 0 si no. Es la **variable objetivo** |
+| `con_retraso` | 1 si `dias_retraso > 0`, 0 si no. Es la **variable objetivo** del modelo 1 |
+| `ejemplares` (por libro) | Cuántas copias tiene la biblioteca del libro |
+| `anio_edicion` (por libro) | Año de la edición **más reciente** entre sus ejemplares. Se resume así porque las copias de un mismo libro traen años distintos |
+| `prestado` (por libro) | 1 si el libro tiene al menos un préstamo, 0 si no. Es la **variable objetivo** del modelo 2 |
 
-**Archivos generados:** `data/proyecto_limpio.csv` (dataset limpio) y `outputs/avance2/antes_despues.csv` (tabla anterior).
+**Archivos generados:** `data/proyecto_limpio.csv`, `data/libros_demanda.csv` y `outputs/antes_despues.csv` (la tabla anterior).
 
 ---
 
 ## C. Visualización con Seaborn
 
-Los gráficos los genera el mismo script `src/preparacion_proyecto.py`. Cuentan una historia en tres pasos: el plazo se relaciona con el retraso, es la única variable que lo hace, y aun así los datos no se separan limpiamente.
+Los 5 gráficos los genera el script `src/analisis_biblioteca.py` y quedan guardados en `outputs/graficos/`. Cuentan una historia en cinco pasos: la gente se queda con el libro un tiempo parecido sin importar el plazo (1), por eso el plazo es lo que más explica los retrasos (2), el rol del usuario casi no influye (3), los libros con más ejemplares se prestan más (4) y la demanda se concentra en pocos géneros (5). Los gráficos 2 y 3 relacionan entradas con el objetivo `con_retraso`; el gráfico 4 apoya el segundo perceptrón y el gráfico 5 las decisiones de adquisición.
 
-### Gráfico 1. Retraso según el plazo concedido (entrada contra objetivo)
-![Retraso por plazo](outputs/avance2/grafico1_retraso_por_plazo.png)
+### Gráfico 1. Duración real de los préstamos devueltos
+![Duración real de los préstamos devueltos](outputs/graficos/biblioteca_hist_dias_prestamo.png)
 
-Cada barra es el porcentaje de préstamos devueltos tarde para un plazo: 80 % con 7 días, 61 % con 14, 41 % con 21 y 22 % con 30. Cuanto más corto es el plazo, más retrasos hay. **Decisión que apoya:** usar `plazo_dias` como entrada principal del modelo.
+Cada barra cuenta cuántos de los 711 préstamos devueltos duraron esos días entre el préstamo y la devolución. Los préstamos se reparten casi parejo entre 1 y 40 días, con una mediana de 19 (línea roja punteada). Los días promedio son casi iguales para cualquier plazo (entre 19.2 y 20.6) y la correlación entre el plazo concedido y los días reales es de −0.025: el usuario se queda con el libro un tiempo parecido sin importar cuánto le den. **Decisión que apoya:** el retraso depende del plazo concedido y no del hábito de cada préstamo, así que `plazo_dias` es una entrada razonable para el perceptrón.
 
-### Gráfico 2. Correlaciones entre las variables de entrada y `con_retraso`
-![Correlaciones](outputs/avance2/grafico2_correlaciones.png)
+### Gráfico 2. Devoluciones tardías según el plazo concedido (entrada contra objetivo)
+![Retraso según el plazo](outputs/graficos/biblioteca_barras_retraso_por_plazo.png)
 
-Un número cercano a 1 o −1 indica una relación fuerte, y uno cercano a 0, que no hay relación. Solo `plazo_dias` se relaciona con el retraso (−0.43, relación inversa: más plazo, menos retraso). `n_ejemplares`, `limite_prestamos`, `mes_prestamo` y `dia_semana` están cerca de 0. **Decisión que apoya:** el perceptrón usa `plazo_dias` y `n_ejemplares` como entradas, y se espera que casi toda la información venga del plazo.
+Cada barra es el porcentaje de préstamos devueltos con retraso para un plazo: 80.1 % con 7 días, 60.5 % con 14, 41.1 % con 21 y 22.1 % con 30 (la gráfica los redondea y muestra entre paréntesis el número de préstamos). Cuanto más corto es el plazo, más retrasos hay, y la prueba chi-cuadrado da p = 1.65×10⁻²⁸, es decir, no es casualidad. **Decisión que apoya:** usar `plazo_dias` como entrada principal del Perceptrón 1, y considerar revisar el plazo de 7 días o enviar recordatorios desde el chatbot.
 
-### Gráfico 3. Días de retraso según el plazo, con el umbral del objetivo
-![Días de retraso por plazo](outputs/avance2/grafico3_dias_retraso_por_plazo.png)
+### Gráfico 3. Días de retraso según el rol del usuario
+![Días de retraso por rol](outputs/graficos/biblioteca_boxplot_retraso_por_rol.png)
 
-Cada caja resume los días de retraso de un plazo. La línea punteada en 0 es el umbral: por encima, retraso; por debajo, a tiempo. La mediana pasa de 14 días de retraso (plazo de 7) a 10 días de adelanto (plazo de 30), pero las cajas se superponen mucho. **Decisión que apoya:** fijar el umbral de la variable objetivo en 0 días, y anticipar que una sola recta no separará bien las clases.
+Cada caja resume los días de retraso de un rol (negativo = devuelto antes del límite; la línea punteada en 0 es el umbral del objetivo). Las cajas se superponen casi por completo: la mediana va de unos −1 día en bibliotecarios a unos +4 en administrativos. El porcentaje de retrasos va de 43.8 % (bibliotecarios) a 61.0 % (administrativos), pero la prueba chi-cuadrado da p = 0.084, así que la diferencia no es concluyente. **Decisión que apoya:** `rol` no entra como entrada de los perceptrones. Se codificó con `pd.get_dummies` para probarlo después con Scikit-Learn.
+
+### Gráfico 4. Ejemplares disponibles contra veces que se presta un libro
+![Ejemplares vs préstamos](outputs/graficos/biblioteca_regresion_ejemplares_prestamos.png)
+
+Cada punto es un libro: en el eje x, cuántos ejemplares tiene la biblioteca de ese título, y en el eje y, cuántas veces se prestó (los puntos están separados un poco para poder verlos). La recta roja sube: la correlación es de 0.49, y el 39.9 % de los libros nunca se ha prestado. **Decisión que apoya:** `ejemplares` es la entrada principal del Perceptrón 2 (¿el libro se ha prestado alguna vez?). Hay que aclarar que la relación es en parte mecánica, porque con más copias hay más oportunidades de préstamo, así que no prueba que comprar más copias haga que un libro se preste más. No confundir con `n_ejemplares` del Perceptrón 1, que es el número de libros dentro de un préstamo.
+
+### Gráfico 5. Los 10 géneros más prestados
+![Los 10 géneros más prestados](outputs/graficos/biblioteca_barras_generos.png)
+
+Cada barra es el número de préstamos de un género. Cinco géneros concentran la demanda, con entre 195 y 217 préstamos cada uno: Administración de Empresas (217), Contabilidad (205), Ingeniería de Sistemas (201), Diseño e Integración Multimedia (195) y Agropecuaria (195). Del sexto en adelante (Aventura, Infantil, Policiaco, Filosofía, Histórico) ningún género pasa de 21 préstamos. **Decisión que apoya:** priorizar los géneros de mayor demanda en las decisiones de adquisición y en el chatbot. Este gráfico describe el catálogo y no entra como entrada de ningún perceptrón.
 
 ---
 
 ## D. Primer modelo: perceptrón desde cero
 
+Se entrenan **dos perceptrones**, cada uno en su propio archivo (juntos cumplen el `perceptron_proyecto.py` de la guía). Los dos usan exactamente los mismos pasos; solo cambian los datos, las entradas y los textos.
+
+| | `src/perceptron_proyecto_retraso.py` | `src/perceptron_proyecto_demanda.py` |
+|---|---|---|
+| Pregunta | ¿El préstamo se devolverá con retraso? | ¿El libro se ha prestado alguna vez? |
+| Datos | `data/proyecto_limpio.csv` | `data/libros_demanda.csv` |
+| Entradas | `plazo_dias`, `n_ejemplares` | `ejemplares`, `anio_edicion` |
+| Variable objetivo (0/1) | `con_retraso` | `prestado` |
+
 ### Variable objetivo
-`con_retraso` vale 1 si `dias_retraso > 0` y 0 si no. El umbral es 0 días: devolver después de la fecha límite cuenta como retraso. Se creó a partir de la columna numérica `dias_retraso`, que **no se usa como entrada** porque contiene la respuesta: dársela al modelo sería como entregarle el examen resuelto.
+- **Modelo 1:** `con_retraso` vale 1 si `dias_retraso > 0` y 0 si no. El umbral es 0 días: devolver después de la fecha límite cuenta como retraso. Se creó a partir de la columna numérica `dias_retraso`, que **no se usa como entrada** porque contiene la respuesta: dársela al modelo sería como entregarle el examen resuelto.
+- **Modelo 2:** `prestado` vale 1 si el libro tiene `prestamos > 0` (al menos un préstamo) y 0 si no. Se creó a partir de la columna numérica `prestamos`, que **no se usa como entrada** por la misma razón.
 
-### Entradas
-Dos variables numéricas: `plazo_dias` (7 a 30) y `n_ejemplares` (1 a 3). Se **estandarizan** con `(x − media) / desviación`, para que ambas queden con media 0 y desviación 1. Sin esto, la variable con números más grandes dominaría el aprendizaje.
+### Entradas y división de los datos
+Cada modelo usa dos variables numéricas, que se **estandarizan** con `(x − media) / desviación` para que ambas queden con media 0 y desviación 1. Sin esto, la variable con números más grandes dominaría el aprendizaje (por ejemplo, un año como 2008 frente a un número de ejemplares como 2).
 
-Los datos se dividen en **80 % para entrenar** (568 préstamos) y **20 % para probar** (143). La media y la desviación se calculan solo con los de entrenamiento y se aplican también a los de prueba. Así se mide el modelo con préstamos que no vio mientras aprendía.
+Los datos se dividen en **80 % para entrenar** y **20 % para probar**: 568 y 143 préstamos en el modelo 1, y 960 y 240 libros en el modelo 2. La media y la desviación se calculan solo con los de entrenamiento y se aplican también a los de prueba. Así se mide el modelo con registros que no vio mientras aprendía.
 
-### Cómo funciona el modelo
-Sigue los mismos pasos de la neurona de la Clase 8 (AND), con una mejora: la sigmoide en lugar del escalón.
+### Cómo funcionan los modelos
+Siguen los mismos pasos de la neurona de la Clase 8 (AND), con una mejora: la sigmoide en lugar del escalón.
 
 1. **Suma ponderada:** `z = w1·x1 + w2·x2 + b`. Cada entrada se multiplica por su peso (su importancia) y se suma el sesgo. Da un número cualquiera, sin significado directo.
-2. **Sigmoide:** traduce ese número a una **probabilidad entre 0 y 1**. Un `z` muy alto da casi 1 (retraso casi seguro), `z = 0` da 0.5 (no sabe) y un `z` muy bajo da casi 0. Reemplaza al escalón de la Clase 8 por dos razones: dice **qué tan seguro** está el modelo (80 % no es lo mismo que 51 %), y es una curva suave, lo que permite aprender con el descenso del gradiente.
-3. **Pérdida logarítmica:** mide qué tan mal van las probabilidades. Castiga más al modelo cuando se equivoca con mucha seguridad. Si dijera 0.5 para todo, la pérdida sería 0.693; esa es la referencia para saber si mejora.
-4. **Descenso del gradiente:** en cada época se calcula hacia dónde mover `w1`, `w2` y `b` para que la pérdida baje, usando todos los préstamos a la vez, y se actualizan los pesos. Es la misma idea de la Clase 8 (`w += α · error · x`), ahora con el error medido sobre probabilidades. Se usa una tasa de aprendizaje de 0.1 y 1000 épocas.
+2. **Sigmoide:** traduce ese número a una **probabilidad entre 0 y 1**. Un `z` muy alto da casi 1, `z = 0` da 0.5 (no sabe) y un `z` muy bajo da casi 0. Reemplaza al escalón de la Clase 8 por dos razones: dice **qué tan seguro** está el modelo (80 % no es lo mismo que 51 %), y es una curva suave, lo que permite aprender con el descenso del gradiente.
+3. **Pérdida logarítmica:** mide qué tan mal van las probabilidades. Castiga más al modelo cuando se equivoca con mucha seguridad.
+4. **Descenso del gradiente:** en cada época se calcula hacia dónde mover `w1`, `w2` y `b` para que la pérdida baje, usando todos los registros a la vez, y se actualizan los pesos. Es la misma idea de la Clase 8 (`w += α · error · x`), ahora con el error medido sobre probabilidades. Se usa una tasa de aprendizaje de 0.1 y 1000 épocas.
 
 ```python
 def sigmoide(z):
     return 1.0 / (1.0 + np.exp(-z))
 
 def predecir_probabilidad(X, w, b):
-    return sigmoide(X @ w + b)      # calcula z de todos los préstamos en una línea
+    return sigmoide(X @ w + b)      # calcula z de todos los registros en una línea
 
 error = p - y                        # qué tan lejos quedó cada probabilidad de la realidad
-grad_w = X.T @ error / n             # promedio sobre todos los préstamos
+grad_w = X.T @ error / n             # promedio sobre todos los registros
 w = w - tasa * grad_w                # se mueve cada peso en la dirección que baja la pérdida
 ```
 
-El modelo parte de los mismos valores iniciales de la Clase 8: `w1 = 0.1`, `w2 = 0.1` y `b = 0`. Para clasificar, una probabilidad de 0.5 o más se toma como "con retraso".
+Los dos modelos parten de los mismos valores iniciales de la Clase 8: `w1 = 0.1`, `w2 = 0.1` y `b = 0`. Para clasificar, una probabilidad de 0.5 o más se toma como clase 1.
 
-### Resultados
+### Modelo 1: retraso del préstamo
 
 | Resultado | Valor |
 |---|---|
 | Pesos finales `w1` (plazo) / `w2` (ejemplares) / `b` | −0.9859 / −0.0231 / +0.0150 |
 | Pérdida inicial → final | 0.7185 → 0.5923 |
 | Exactitud en entrenamiento / prueba | 69.5 % / 68.5 % |
-| Referencia: predecir siempre la clase más común | 50.5 % |
+| Referencia: predecir siempre la clase más común | 50.5 % en entrenamiento / 55.9 % en prueba |
 
-Dos lecturas rápidas: la pérdida **bajó**, así que el modelo aprendió, y la exactitud en prueba es casi igual a la de entrenamiento, así que no está memorizando los datos que vio.
+La pérdida **bajó**, así que el modelo aprendió, y la exactitud en prueba es casi igual a la de entrenamiento, así que no está memorizando los datos que vio.
 
-![Curva de aprendizaje]
+![Curva de aprendizaje del modelo de retraso](outputs/avance2/curva_aprendizaje_retraso.png)
 
-**Curva de aprendizaje.** Muestra la pérdida en cada época. Baja rápido y se estabiliza hacia la época 200, siempre por debajo de la línea de adivinar (0.693). No hacen falta muchas más épocas.
+**Curva de aprendizaje.** Muestra la pérdida en cada época. Baja rápido (0.7185 → 0.5943 en las primeras 100 épocas) y se estabiliza en 0.5923 hacia la época 300, siempre por debajo de la línea de adivinar (0.693). No hacen falta más épocas.
 
-![Frontera de decisión]
+![Frontera de decisión del modelo de retraso](outputs/avance2/frontera_decision_retraso.png)
 
-**Frontera de decisión.** Cada punto es un préstamo (rojo = con retraso, azul = a tiempo). La línea negra es donde el modelo da 50 % de probabilidad: a su izquierda predice retraso y a su derecha, a tiempo. Los puntos forman columnas porque el plazo solo toma 4 valores.
+**Frontera de decisión.** Cada punto es un préstamo (rojo = con retraso, azul = a tiempo). La línea negra es donde el modelo da 50 % de probabilidad: a su izquierda (fondo rosado) predice retraso y a su derecha (fondo azul), a tiempo. Los puntos forman columnas porque el plazo solo toma 4 valores.
 
-### Interpretación
-
-- **Signo de `w1` (plazo): negativo.** A mayor plazo, menor probabilidad de retraso. Cada 8.5 días más de plazo (una desviación) dejan las probabilidades de retraso en alrededor de un tercio (se multiplican por 0.37). En la práctica, los préstamos de 7 días son los de más riesgo.
+**Interpretación**
+- **Signo de `w1` (plazo): negativo.** A mayor plazo, menor probabilidad de retraso. Cada 8.5 días más de plazo (una desviación) multiplican las probabilidades relativas de retraso por 0.37. En la práctica, los préstamos de 7 días son los de más riesgo.
 - **Signo de `w2` (ejemplares): casi cero.** Cuántos libros se lleve el usuario no cambia la predicción.
 - **Frontera.** Con el número de ejemplares promedio, la probabilidad es 50 % cuando el plazo es de unos 18 días. La línea es casi vertical porque solo el plazo pesa.
 - **¿Los datos son linealmente separables? No.** En cada plazo hay préstamos de ambas clases mezclados y ninguna recta los separa del todo. El modelo acierta cerca del 69 % porque casi toda la información está en una sola variable.
 
-### Limitaciones
+### Modelo 2: demanda del libro
 
-- **Pocas combinaciones de entrada:** solo hay 4 plazos y 3 tamaños de préstamo, así que la frontera tiene poco que separar.
-- **Préstamos abiertos excluidos:** los 189 préstamos sin devolver quedaron fuera del entrenamiento. Según el avance 1, 135 llevan más de un año abiertos, así que probablemente son retrasos y la tasa real se subestima.
+| Resultado | Valor |
+|---|---|
+| Pesos finales `w1` (ejemplares) / `w2` (año de edición) / `b` | +0.8869 / −0.0427 / +0.5071 |
+| Pérdida inicial → final | 0.6729 → 0.6041 |
+| Exactitud en entrenamiento / prueba | 67.8 % / 71.2 % |
+| Referencia: predecir siempre la clase más común | 60.1 % en entrenamiento / 60.0 % en prueba |
+
+La pérdida bajó, pero menos que en el modelo 1. La referencia justa aquí no es 0.693 sino unos 0.67, que es la pérdida de decir siempre "60 % de probabilidad de que se haya prestado" (la proporción real de libros prestados). La exactitud en prueba (71.2 %) sale más alta que en entrenamiento (67.8 %) por azar: con solo 240 libros de prueba esa diferencia no significa que el modelo generalice mejor.
+
+![Curva de aprendizaje del modelo de demanda](outputs/avance2/curva_aprendizaje_demanda.png)
+
+**Curva de aprendizaje.** La pérdida baja de 0.6729 a 0.6077 en las primeras 100 épocas y se estabiliza en 0.6041 hacia la época 500.
+
+![Frontera de decisión del modelo de demanda](outputs/avance2/frontera_decision_demanda.png)
+
+**Frontera de decisión.** Cada punto es un libro (rojo = prestado alguna vez, azul = nunca prestado). La línea negra separa los libros de 1 ejemplar, que el modelo clasifica como "nunca prestado" (fondo azul), de los de 2 o más, que clasifica como "prestado" (fondo rosado). La línea es casi vertical porque el año de edición casi no pesa.
+
+**Interpretación**
+- **Signo de `w1` (ejemplares): positivo.** Los libros con más copias tienen más probabilidad de haberse prestado (nunca se ha prestado el 61.5 % de los libros de 1 ejemplar, el 39.5 % de los de 2 y el 8.7 % de los de 5): cada 1.2 ejemplares más multiplican las probabilidades relativas por 2.43. Con el año de edición promedio, la probabilidad es 50 % con unos 1.5 ejemplares.
+- **Signo de `w2` (año de edición): casi cero (−0.043).** Que la edición sea más antigua o más reciente casi no cambia la predicción.
+- **¿Los datos son linealmente separables? No.** Hay libros prestados y nunca prestados en todas las columnas de ejemplares, y la mejor recta acierta 67.8 %.
+
+### Limitaciones
+- **En los dos modelos solo una entrada tiene señal:** el plazo en el modelo 1 y los ejemplares en el modelo 2. La segunda entrada sale con peso casi cero; es un resultado, no un error.
+- **Pocas combinaciones de entrada:** solo hay 4 plazos y 3 tamaños de préstamo, y los ejemplares por libro van de 1 a 5, así que las fronteras tienen poco que separar.
+- **Préstamos abiertos excluidos (modelo 1):** los 189 préstamos sin devolver quedaron fuera del entrenamiento. Según el avance 1, 135 llevan más de un año abiertos, así que probablemente son retrasos y la tasa real se subestima.
+- **Relación en parte mecánica (modelo 2):** un libro con más copias tiene más oportunidades de prestarse, así que el modelo no prueba que comprar más copias haga que un libro se preste más.
 - **Una sola neurona** solo puede trazar una recta; no captura relaciones más complejas.
 - **Datos simulados:** en ellos, los días que el usuario se queda con el libro no dependen del plazo (correlación −0.025). De ahí sale el patrón de 80 % a 22 %, que podría ser distinto con datos reales.
 
@@ -540,7 +602,7 @@ Dos lecturas rápidas: la pérdida **bajó**, así que el modelo aprendió, y la
 
 ## E. Plan hacia el proyecto final
 
-- **Tipo de problema:** clasificación. Se predice si un préstamo se devolverá con retraso o a tiempo.
+- **Tipo de problema:** clasificación. Se predice si un préstamo se devolverá con retraso o a tiempo (modelo principal). El modelo de demanda del libro queda como complemento para las decisiones de adquisición.
 - **Modelos a comparar en la Clase 12 (9 de noviembre), con Scikit-Learn:** regresión logística (la versión profesional de lo que hizo el perceptrón), árbol de decisión y bosque aleatorio.
 - **Métrica para elegir el mejor:** el **recall** de la clase "con retraso", acompañado del F1. Es peor no avisar de un retraso que avisar de más, y el recall mide cuántos retrasos reales se detectan. El F1 evita ignorar la precisión (que no se avise de retrasos que no ocurren). La exactitud sola no basta.
 - **Demostración final:** predecir la probabilidad de retraso de préstamos nuevos, variando el plazo y el rol del usuario, y mostrar cómo el bibliotecario usaría ese aviso a través del chatbot.
@@ -556,17 +618,27 @@ Las clases son los lunes. Los lunes 2 y 16 de noviembre son festivos, por lo que
 | 3 | 9 – 15 nov | **Clase 12 (lunes 9):** entrenar el árbol de decisión y el bosque aleatorio y compararlos con la regresión logística. Elegir el mejor por recall, acompañado del F1 | Tabla comparativa de los 3 modelos y el modelo elegido, justificado |
 | 4 | 16 – 22 nov (lunes 16 festivo) | Mejorar el modelo elegido (más variables como el rol, ajuste del umbral). Definir los préstamos nuevos de la demostración y crear la función que predice la probabilidad de retraso | Función `predecir_retraso()` y lista de casos de demostración |
 | 5 | 23 – 29 nov | Conectar la predicción con el chatbot (aviso de riesgo de retraso). Ensayar la demostración con cronómetro. Redactar el informe final (normas APA) | Chatbot con la predicción integrada, informe final en borrador |
-| 6 | 30 nov | **Sustentación final**  | Demostración y documento final entregados |
+| 6 | 30 nov | **Sustentación final** | Demostración y documento final entregados |
+
+---
 
 
 
-**Estructura de los archivos del avance**
+**Salida esperada del modelo 1** (resumen):
 
 ```
-├── data/
-│   └── proyecto_limpio.csv            # dataset limpio (salida de la preparación)
-├── outputs/avance2/                   # gráficos y tabla antes/después
-└── src/
-    ├── preparacion_proyecto.py        # requisitos B y C
-    └── perceptron_psaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaasssaroyecto.py         # requisito D
+Pesos finales:  w1 (plazo_dias) = -0.9859 | w2 (n_ejemplares) = -0.0231 | b = +0.0150
+Pérdida inicial: 0.7185 | pérdida final: 0.5923
+Exactitud en entrenamiento: 69.5% | en prueba: 68.5%
+Referencia (predecir siempre la clase más común): 50.5% en entrenamiento | 55.9% en prueba
 ```
+
+**Salida esperada del modelo 2** (resumen):
+
+```
+Pesos finales:  w1 (ejemplares) = +0.8869 | w2 (anio_edicion) = -0.0427 | b = +0.5071
+Pérdida inicial: 0.6729 | pérdida final: 0.6041
+Exactitud en entrenamiento: 67.8% | en prueba: 71.2%
+Referencia (predecir siempre la clase más común): 60.1% en entrenamiento | 60.0% en prueba
+```
+
