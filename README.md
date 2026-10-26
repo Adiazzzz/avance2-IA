@@ -559,14 +559,6 @@ Las clases son los lunes. Los lunes 2 y 16 de noviembre son festivos, por lo que
 | 6 | 30 nov | **Sustentación final**  | Demostración y documento final entregados |
 
 
-**Salida esperada del perceptrón** (resumen):
-
-```
-Pesos finales:  w1 (plazo_dias) = -0.9859 | w2 (n_ejemplares) = -0.0231 | b = +0.0150
-Pérdida inicial: 0.7185 | pérdida final: 0.5923
-Exactitud en entrenamiento: 69.5% | en prueba: 68.5%
-Referencia (predecir siempre la clase más común): 50.5%
-```
 
 **Estructura de los archivos del avance**
 
